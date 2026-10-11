@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contribution scolaire</title>
+<meta name="description" content="Payez en ligne la contribution scolaire de vos enfants, par Mobile Money ou carte bancaire.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- FedaPay Checkout.js (doc : https://docs.fedapay.com/introduction/fr/checkoutjs-fr) -->
+<script src="https://cdn.fedapay.com/checkout.js?v=1.1.7"></script>
+
+<style>
+  :root {
+    --kaki: #CEC29A;          /* la tenue scolaire */
+    --kaki-encre: #4A4124;
+    --papier: #FFFFFF;
+    --encre: #1C2A5C;         /* texte : encre bleu-noir */
+    --stylo: #2445B0;         /* stylo bleu : actions, écriture */
+    --stylo-fonce: #1A3489;
+    --gris: #565D76;
+    --bordure: #B9BED0;
+    --filet: #DADDE7;
+    --seyes: rgba(70, 100, 200, .30);
+    --seyes-fin: rgba(70, 100, 200, .12);
+    --marge: #D2463C;         /* marge rouge du cahier */
+    --ok: #1C7A49;
+    --erreur: #B42318;
+    --focus: #F2B705;
+    color-scheme: light;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--encre);
+    background-color: var(--kaki);
+    /* sergé discret, comme le tissu kaki */
+    background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 2px, transparent 2px 6px);
+    font: 400 17px/1.55 "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  /* ---------- Bandeau démo ---------- */
+  .demo {
+    background: var(--encre);
+    color: #fff;
+    font-size: 15px;
+    padding: 10px 16px;
+    text-align: center;
+  }
+  .demo code { background: rgba(255,255,255,.14); padding: 1px 6px; border-radius: 4px; }
+
+  /* ---------- En-tête ---------- */
+  .entete {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 28px 16px 8px;
+  }
+  .ecole {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--kaki-encre);
+  }
+  .ecole svg { flex: none; }
+  h1 {
+    margin: 12px 0 6px;
+    font-size: clamp(28px, 5.2vw, 42px);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+  }
+  .chapo { margin: 0; max-width: 58ch; color: #36311d; }
+
+  /* ---------- Mise en page ---------- */
+  .page {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 20px 16px 40px;
+    display: grid;
+    gap: 20px;
+  }
+  @media (min-width: 920px) {
+    .page { grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
+    .recap { position: sticky; top: 20px; }
+  }
+
+  .carte {
+    background: var(--papier);
+    border-radius: 16px;
+    padding: 4px 20px 12px;
+    box-shadow: 0 1px 0 rgba(60, 50, 20, .18), 0 14px 32px -20px rgba(60, 50, 20, .55);
+  }
+
+  .section { padding: 22px 0; border-top: 1px solid var(--filet); }
+  .section:first-child { border-top: 0; }
+  .section h2 {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 4px;
+    font-size: 19px;
+    line-height: 1.3;
+  }
+  .num {
+    flex: none;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--encre);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 15px;
+  }
+  .aide { margin: 0 0 16px 40px; color: var(--gris); font-size: 15px; }
+
+  /* ---------- Champs ---------- */
+  .champ { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; min-width: 0; }
+  .champ:last-child { margin-bottom: 0; }
+  label, .etiquette { font-weight: 700; font-size: 15px; }
+  .facultatif { font-weight: 400; color: var(--gris); }
+  input, select {
+    width: 100%;
+    min-height: 50px;
+    padding: 12px 14px;
+    background: #fff;
+    border: 1.5px solid var(--bordure);
+    border-radius: 10px;
+    font-size: 17px;
+  }
+  select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%231C2A5C' stroke-width='2'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+  }
+  input::placeholder { color: #9096AC; }
+  .indice { font-size: 14px; color: var(--gris); }
+  .erreur { display: none; font-size: 14px; color: var(--erreur); font-weight: 700; }
+  .invalide input, .invalide select, .invalide .tel span { border-color: var(--erreur); }
+  .invalide .erreur { display: block; }
+  .invalide .indice { display: none; }
+
+  .duo { display: grid; gap: 0 14px; }
+  .duo .champ:last-child { margin-bottom: 14px; }
+  @media (min-width: 560px) { .duo { grid-template-columns: 1fr 1fr; } }
+
+  .tel { display: flex; }
+  .tel span {
+    display: flex; align-items: center;
+    padding: 0 12px;
+    border: 1.5px solid var(--bordure);
+    border-right: 0;
+    border-radius: 10px 0 0 10px;
+    background: #F3F4F8;
+    font-weight: 700;
+  }
+  .tel input { border-radius: 0 10px 10px 0; }
+
+  /* ---------- Enfants ---------- */
+  .eleve {
+    padding: 12px 14px 14px;
+    margin-bottom: 12px;
+    border: 1.5px dashed #C3C8D8;
+    border-radius: 12px;
+  }
+  .eleve-tete {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+    font-weight: 700; font-size: 15px; color: var(--gris);
+  }
+  .eleve-champs { display: grid; grid-template-columns: minmax(0, 1fr) 116px; gap: 10px; }
+  .eleve-champs .champ { margin-bottom: 0; }
+  .retirer {
+    background: none; border: 0; padding: 6px 4px;
+    color: var(--erreur); font-weight: 700; font-size: 14px;
+    cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .ajouter {
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 46px;
+    padding: 10px 16px;
+    background: #fff;
+    border: 1.5px solid var(--stylo);
+    border-radius: 10px;
+    color: var(--stylo);
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .ajouter:hover { background: #F2F5FF; }
+
+  /* ---------- Choix de la contribution ---------- */
+  .options { display: grid; gap: 10px; margin-top: 14px; }
+  .option {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border: 1.5px solid #C3C8D8;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 400;
+    font-size: 17px;
+  }
+  .option.choisie { border-color: var(--stylo); background: #F3F6FF; box-shadow: inset 0 0 0 1px var(--stylo); }
+  .option input { width: 20px; height: 20px; min-height: 0; margin: 0; accent-color: var(--stylo); }
+  .opt-titre { display: block; font-weight: 700; }
+  .option small { display: block; color: var(--gris); font-size: 14px; font-weight: 400; }
+  .prix { text-align: right; font-weight: 700; white-space: nowrap; }
+  #champ-libre { margin-top: 14px; }
+
+  /* ---------- Le cahier (récapitulatif et reçu) ---------- */
+  .feuille {
+    background: var(--papier);
+    border-radius: 4px;
+    box-shadow: 0 1px 0 rgba(60, 50, 20, .18), 0 18px 34px -22px rgba(60, 50, 20, .6);
+    overflow: hidden;
+  }
+  .cahier {
+    --pas: 32px;
+    position: relative;
+    padding: var(--pas) 20px var(--pas) 70px;
+    line-height: var(--pas);
+    background-color: #fff;
+    background-image:
+      linear-gradient(90deg, transparent 52px, var(--marge) 52px, var(--marge) 54px, transparent 54px),
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--pas) - 1px), var(--seyes) calc(var(--pas) - 1px) var(--pas)),
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--pas) / 4 - 1px), var(--seyes-fin) calc(var(--pas) / 4 - 1px) calc(var(--pas) / 4)),
+      repeating-linear-gradient(90deg, transparent 0 calc(var(--pas) - 1px), var(--seyes-fin) calc(var(--pas) - 1px) var(--pas));
+    background-position: 0 0, 0 0, 0 0, 54px 0;
+  }
+  .cahier h2 { margin: 0; font-size: 20px; line-height: var(--pas); }
+  .cahier .sous { margin: 0; font-size: 15px; color: var(--gris); line-height: var(--pas); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .manuscrit { font-family: "Kalam", "Segoe Print", "Bradley Hand", cursive; color: var(--stylo); }
+
+  .lignes { list-style: none; margin: var(--pas) 0 0; padding: 0; }
+  .lignes li { display: block; }
+  .lignes .qui { display: block; overflow-wrap: break-word; font-size: 20px; }
+  .lignes .qui.vide { color: #8E9BD0; }
+  .lignes .detail { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; min-height: var(--pas); }
+  .lignes .classe { font-family: "Atkinson Hyperlegible", sans-serif; font-size: 14px; color: var(--gris); font-style: normal; }
+  .lignes .combien { flex: none; margin-left: auto; font-size: 20px; }
+
+  .total {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    margin: var(--pas) 0 0;
+    line-height: calc(var(--pas) * 2);
+  }
+  .total span { font-weight: 700; font-size: 17px; }
+  .total strong {
+    font-family: "Kalam", cursive;
+    font-weight: 700;
+    font-size: 32px;
+    color: var(--stylo);
+    white-space: nowrap;
+    text-decoration: underline double var(--marge);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 7px;
+  }
+
+  .recap-pied { padding: 18px 20px 20px; border-top: 1px solid var(--filet); }
+
+  .payer {
+    width: 100%;
+    min-height: 56px;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 14px 18px;
+    background: var(--stylo);
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 18px;
+    cursor: pointer;
+  }
+  .payer:hover { background: var(--stylo-fonce); }
+  .payer:disabled { background: #6F80BD; cursor: progress; }
+  .secondaire {
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 18px;
+    background: #fff;
+    color: var(--stylo);
+    border: 1.5px solid var(--stylo);
+    border-radius: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .note { margin: 12px 0 0; font-size: 14px; color: var(--gris); line-height: 1.5; }
+
+  .alerte {
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 15px;
+    line-height: 1.45;
+    border-left: 4px solid;
+  }
+  .alerte.erreur { display: block; background: #FDF0EE; border-color: var(--erreur); color: #7A1A10; font-weight: 400; }
+  .alerte.info { background: #EEF2FF; border-color: var(--stylo); color: var(--encre); }
+  .alerte.attente { background: #FFF7E0; border-color: #B7791F; color: #5C3D07; }
+
+  /* ---------- Reçu ---------- */
+  .succes { max-width: 600px; margin: 0 auto; padding: 20px 16px 40px; outline: none; }
+  .merci { display: flex; align-items: center; gap: 10px; margin: 0 0 16px; font-weight: 700; font-size: 19px; color: var(--ok); }
+  .recu h2 { padding-right: 96px; }
+  .recu dl { margin: var(--pas) 0 0; display: grid; grid-template-columns: 9.5em minmax(0, 1fr); column-gap: 12px; }
+  .recu dt { font-size: 14px; color: var(--gris); line-height: var(--pas); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .recu dd { margin: 0; font-family: "Kalam", cursive; color: var(--stylo); font-size: 19px; line-height: var(--pas); overflow-wrap: break-word; }
+  .recu .dt-total { font-weight: 700; color: var(--encre); font-size: 16px; line-height: calc(var(--pas) * 2); }
+  .recu .dd-total { font-weight: 700; font-size: 30px; line-height: calc(var(--pas) * 2); white-space: nowrap; text-decoration: underline double var(--marge); text-decoration-thickness: 2px; text-underline-offset: 7px; }
+  @media (max-width: 519px) {
+    .cahier { padding-right: 16px; padding-left: 66px; }
+    .recu dl { grid-template-columns: minmax(0, 1fr); }
+    .recu dt:empty { display: none; }
+    .recu .dt-total { line-height: var(--pas); }
+  }
+  .tampon {
+    position: absolute;
+    top: 22px; right: 18px;
+    padding: 2px 12px;
+    border: 3px solid var(--marge);
+    border-radius: 6px;
+    color: var(--marge);
+    font-weight: 700;
+    font-size: 22px;
+    line-height: 1.3;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    transform: rotate(-12deg);
+    opacity: .88;
+    mix-blend-mode: multiply;
+    animation: tamponner .42s cubic-bezier(.2, .9, .3, 1.3) .15s both;
+  }
+  .tampon.demo-tampon { border-color: var(--gris); color: var(--gris); font-size: 16px; }
+  @keyframes tamponner {
+    from { transform: rotate(-12deg) scale(1.7); opacity: 0; }
+    to   { transform: rotate(-12deg) scale(1);   opacity: .88; }
+  }
+  .actions { display: grid; gap: 10px; margin-top: 18px; }
+  @media (min-width: 520px) { .actions { grid-template-columns: 1fr 1fr; } }
+
+  /* ---------- Pied ---------- */
+  .pied { max-width: 1080px; margin: 0 auto; padding: 0 16px 32px; font-size: 14px; color: #3f3a24; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .tampon { animation: none; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .demo, .entete .chapo, .page, .pied, .actions, .merci, .succes > .note { display: none !important; }
+    .succes { padding: 0; max-width: none; }
+    .feuille { box-shadow: none; border: 1px solid #ccc; }
+    .cahier, .tampon { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .tampon { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="demo" id="demo" hidden>
+  Mode démonstration : aucun paiement réel. Renseignez votre clé publique FedaPay dans <code>CONFIG</code> pour activer le paiement.
+</div>
+
+<header class="entete">
+  <p class="ecole">
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+      <rect x="2" y="4" width="26" height="22" rx="3" fill="#4A4124"/>
+      <rect x="5" y="7" width="20" height="16" rx="1.5" fill="#2F4A3A"/>
+      <path d="M9 18c2-4 4-5 6-2s4 1 6-3" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <span id="nom-ecole"></span>
+  </p>
+  <h1>Contribution scolaire <span id="annee"></span></h1>
+  <p class="chapo" id="chapo">Réglez la contribution de vos enfants en quelques minutes, par Mobile Money ou carte bancaire. Un reçu s'affiche à la fin, à imprimer ou à garder en capture d'écran.</p>
+</header>
+
+<main class="page" id="page">
+  <form class="carte" id="formulaire" novalidate>
+
+    <section class="section" aria-labelledby="t-eleves">
+      <h2 id="t-eleves"><span class="num" aria-hidden="true">1</span>Vos enfants inscrits à l'école</h2>
+      <p class="aide">Ajoutez chaque enfant pour qui vous payez.</p>
+      <div id="liste-eleves"></div>
+      <button type="button" class="ajouter" id="ajouter-eleve">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        Ajouter un autre enfant
+      </button>
+    </section>
+
+    <section class="section" aria-labelledby="t-contrib">
+      <h2 id="t-contrib"><span class="num" aria-hidden="true">2</span>Ce que vous payez</h2>
+      <div class="options" id="options" role="radiogroup" aria-labelledby="t-contrib"></div>
+      <div class="champ" id="champ-libre" hidden>
+        <label for="montant-libre">Montant à payer (FCFA)</label>
+        <input id="montant-libre" inputmode="numeric" autocomplete="off" placeholder="Ex. 10 000">
+        <span class="erreur" id="err-libre">Indiquez le montant à payer.</span>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="t-parent">
+      <h2 id="t-parent"><span class="num" aria-hidden="true">3</span>Parent ou tuteur</h2>
+      <p class="aide">Ces informations figurent sur le reçu et permettent à l'école de vous joindre.</p>
+      <div class="duo">
+        <div class="champ">
+          <label for="p-nom">Nom</label>
+          <input id="p-nom" autocomplete="family-name" placeholder="Ex. HOUNSOU">
+          <span class="erreur">Indiquez votre nom.</span>
+        </div>
+        <div class="champ">
+          <label for="p-prenom">Prénoms</label>
+          <input id="p-prenom" autocomplete="given-name" placeholder="Ex. Marcelline">
+          <span class="erreur">Indiquez vos prénoms.</span>
+        </div>
+      </div>
+      <div class="champ">
+        <label for="p-tel">Téléphone</label>
+        <div class="tel"><span aria-hidden="true">+229</span><input id="p-tel" type="tel" inputmode="numeric" autocomplete="tel-national" placeholder="01 97 00 00 00" aria-describedby="p-tel-indice"></div>
+        <span class="indice" id="p-tel-indice">10 chiffres, commençant par 01</span>
+        <span class="erreur">Entrez un numéro à 10 chiffres commençant par 01.</span>
+      </div>
+      <div class="champ">
+        <label for="p-email">E-mail <span class="facultatif">(facultatif)</span></label>
+        <input id="p-email" type="email" autocomplete="email" placeholder="nom@exemple.com">
+        <span class="erreur">Cette adresse e-mail n'est pas valide.</span>
+      </div>
+    </section>
+  </form>
+
+  <aside class="recap feuille" aria-labelledby="t-recap">
+    <div class="cahier">
+      <h2 id="t-recap">Récapitulatif</h2>
+      <p class="sous" id="recap-contrib"></p>
+      <ul class="lignes manuscrit" id="lignes"></ul>
+      <p class="total" aria-live="polite"><span>Total</span><strong id="total">0 FCFA</strong></p>
+    </div>
+    <div class="recap-pied">
+      <div class="alerte" id="alerte" role="alert" hidden></div>
+      <button type="submit" form="formulaire" class="payer" id="payer"></button>
+      <p class="note">Une fenêtre sécurisée FedaPay s'ouvre : vous y choisissez Mobile Money ou carte bancaire, puis vous validez sur votre téléphone.</p>
+    </div>
+  </aside>
+</main>
+
+<section class="succes" id="succes" hidden tabindex="-1" aria-labelledby="t-succes">
+  <p class="merci">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="12" fill="#1C7A49"/><path d="M7.5 13.5l3.6 3.6 7.4-8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Merci, votre paiement est confirmé.
+  </p>
+  <div class="feuille">
+    <div class="cahier recu">
+      <span class="tampon" id="tampon" aria-hidden="true">Payé</span>
+      <h2 id="t-succes">Reçu de paiement</h2>
+      <p class="sous" id="recu-ecole"></p>
+      <dl id="recu-details"></dl>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="button" class="payer" id="imprimer">Imprimer le reçu</button>
+    <button type="button" class="secondaire" id="nouveau">Faire un autre paiement</button>
+  </div>
+  <p class="note">Conservez la référence : elle permet à l'école de retrouver votre paiement.</p>
+</section>
+
+<footer class="pied" id="pied"></footer>
+
+<script>
+/* =====================================================================
+   CONFIGURATION — à adapter à votre école
+   ===================================================================== */
+const CONFIG = {
+  ecole: "École Primaire Le Baobab",
+  annee: "2026-2027",
+  contactTelephone: "01 00 00 00 00",       // affiché en bas de page ("" pour masquer)
+
+  fedapay: {
+    // Clé PUBLIQUE uniquement (pk_sandbox_… ou pk_live_…). Jamais la clé secrète ici.
+    public_key: "pk_sandbox_XXXXXXXXXXXXXXXXXXXXXXXX",
+    environment: "sandbox"                  // "sandbox" pour tester, "live" en production
+  },
+
+  classes: ["CI", "CP", "CE1", "CE2", "CM1", "CM2"],
+
+  // Montants en FCFA (entiers). parEleve: true => multiplié par le nombre d'enfants.
+  contributions: [
+    { id: "annuelle",  libelle: "Contribution annuelle",       detail: "Toute l'année scolaire", montant: 15000, parEleve: true },
+    { id: "trimestre", libelle: "Contribution du trimestre",   detail: "1er trimestre",          montant: 5000,  parEleve: true }
+  ],
+
+  montantLibre: { actif: true, libelle: "Autre montant", detail: "Don ou complément, au choix", minimum: 500 },
+
+  maxEleves: 6
+};
+
+/* ===================================================================== */
+(function () {
+  "use strict";
+
+  const $ = (s, el = document) => el.querySelector(s);
+  const fmt = n => new Intl.NumberFormat("fr-FR").format(n) + "\u00A0FCFA";
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const cadenas = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><rect x="3" y="8" width="12" height="8.5" rx="2" fill="currentColor"/><path d="M5.8 8V5.8a3.2 3.2 0 0 1 6.4 0V8" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>';
+
+  const cle = CONFIG.fedapay.public_key || "";
+  const modeDemo = !cle || /X{4,}/.test(cle);
+
+  const etat = {
+    eleves: [{ nom: "", classe: "" }],
+    contribution: CONFIG.contributions.length ? CONFIG.contributions[0].id : "libre",
+    occupe: false
+  };
+
+  /* ---------- En-tête et pied ---------- */
+  $("#nom-ecole").textContent = CONFIG.ecole;
+  $("#annee").textContent = CONFIG.annee;
+  document.title = "Contribution scolaire – " + CONFIG.ecole;
+  $("#demo").hidden = !modeDemo;
+  if (CONFIG.contactTelephone) {
+    $("#pied").textContent = "Une question sur la contribution ? Appelez l'école au " + CONFIG.contactTelephone + ".";
+  }
+
+  /* ---------- Enfants ---------- */
+  function rendreEleves() {
+    $("#liste-eleves").innerHTML = etat.eleves.map((e, i) => `
+      <div class="eleve" role="group" aria-labelledby="e-titre-${i}">
+        <div class="eleve-tete">
+          <span id="e-titre-${i}">Enfant ${i + 1}</span>
+          ${i > 0 ? `<button type="button" class="retirer" data-retirer="${i}" aria-label="Retirer l'enfant ${i + 1}">Retirer</button>` : ""}
+        </div>
+        <div class="eleve-champs">
+          <div class="champ">
+            <label for="e-nom-${i}">Nom et prénoms</label>
+            <input id="e-nom-${i}" data-champ="nom" data-i="${i}" value="${esc(e.nom)}" autocomplete="off" placeholder="Ex. HOUNSOU Awa">
+            <span class="erreur">Indiquez le nom de l'enfant.</span>
+          </div>
+          <div class="champ">
+            <label for="e-classe-${i}">Classe</label>
+            <select id="e-classe-${i}" data-champ="classe" data-i="${i}">
+              <option value="">Choisir</option>
+              ${CONFIG.classes.map(c => `<option value="${esc(c)}" ${c === e.classe ? "selected" : ""}>${esc(c)}</option>`).join("")}
+            </select>
+            <span class="erreur">Choisissez la classe.</span>
+          </div>
+        </div>
+      </div>`).join("");
+    $("#ajouter-eleve").hidden = etat.eleves.length >= CONFIG.maxEleves;
+  }
+
+  $("#liste-eleves").addEventListener("input", ev => {
+    const el = ev.target;
+    if (!el.dataset.champ) return;
+    etat.eleves[+el.dataset.i][el.dataset.champ] = el.value;
+    rendreRecap();
+  });
+  $("#liste-eleves").addEventListener("change", ev => {
+    const el = ev.target;
+    if (!el.dataset.champ) return;
+    etat.eleves[+el.dataset.i][el.dataset.champ] = el.value;
+    el.closest(".champ").classList.remove("invalide");
+    rendreRecap();
+  });
+  $("#liste-eleves").addEventListener("click", ev => {
+    const b = ev.target.closest("[data-retirer]");
+    if (!b) return;
+    etat.eleves.splice(+b.dataset.retirer, 1);
+    rendreEleves();
+    rendreRecap();
+    $("#ajouter-eleve").focus();
+  });
+  $("#ajouter-eleve").addEventListener("click", () => {
+    if (etat.eleves.length >= CONFIG.maxEleves) return;
+    etat.eleves.push({ nom: "", classe: "" });
+    rendreEleves();
+    rendreRecap();
+    $("#e-nom-" + (etat.eleves.length - 1)).focus();
+  });
+
+  /* ---------- Choix de la contribution ---------- */
+  function rendreOptions() {
+    const opts = CONFIG.contributions.slice();
+    if (CONFIG.montantLibre.actif) opts.push({ id: "libre", libelle: CONFIG.montantLibre.libelle, detail: CONFIG.montantLibre.detail, montant: null });
+    $("#options").innerHTML = opts.map(o => `
+      <label class="option ${o.id === etat.contribution ? "choisie" : ""}">
+        <input type="radio" name="contribution" value="${esc(o.id)}" ${o.id === etat.contribution ? "checked" : ""}>
+        <span><span class="opt-titre">${esc(o.libelle)}</span><small>${esc(o.detail || "")}</small></span>
+        <span class="prix">${o.montant != null ? fmt(o.montant) + (o.parEleve ? "<small>par enfant</small>" : "") : "<small>Vous choisissez</small>"}</span>
+      </label>`).join("");
+    $("#champ-libre").hidden = etat.contribution !== "libre";
+  }
+
+  $("#options").addEventListener("change", ev => {
+    if (ev.target.name !== "contribution") return;
+    etat.contribution = ev.target.value;
+    document.querySelectorAll(".option").forEach(l => l.classList.toggle("choisie", l.contains(ev.target)));
+    $("#champ-libre").hidden = etat.contribution !== "libre";
+    if (etat.contribution === "libre") $("#montant-libre").focus();
+    else $("#champ-libre").classList.remove("invalide");
+    majAlerteValidation();
+    rendreRecap();
+  });
+  $("#montant-libre").addEventListener("input", rendreRecap);
+
+  /* ---------- Calculs ---------- */
+  const contributionChoisie = () => CONFIG.contributions.find(c => c.id === etat.contribution) || null;
+  function montantLibre() {
+    const v = parseInt(($("#montant-libre").value || "").replace(/\D/g, ""), 10);
+    return isNaN(v) ? 0 : v;
+  }
+  function total() {
+    const c = contributionChoisie();
+    if (c) return c.parEleve ? c.montant * etat.eleves.length : c.montant;
+    return montantLibre();
+  }
+
+  /* ---------- Récapitulatif ---------- */
+  function rendreRecap() {
+    const c = contributionChoisie();
+    const lignes = etat.eleves.map((e, i) => {
+      const nom = e.nom.trim();
+      return `<li>
+        <span class="qui ${nom ? "" : "vide"}">${esc(nom || "Enfant " + (i + 1))}</span>
+        <span class="detail">
+          <em class="classe">${e.classe ? "Classe : " + esc(e.classe) : "Classe à choisir"}</em>
+          <span class="combien">${c && c.parEleve ? esc(fmt(c.montant)) : ""}</span>
+        </span>
+      </li>`;
+    });
+    const ligneMontant = (libelle, montant) =>
+      `<li><span class="detail"><em class="classe">${esc(libelle)}</em><span class="combien">${montant}</span></span></li>`;
+    if (c && !c.parEleve) lignes.push(ligneMontant(c.libelle, esc(fmt(c.montant))));
+    if (!c) lignes.push(ligneMontant(CONFIG.montantLibre.libelle, montantLibre() ? esc(fmt(montantLibre())) : "…"));
+    $("#lignes").innerHTML = lignes.join("");
+    $("#recap-contrib").textContent = (c ? c.libelle : CONFIG.montantLibre.libelle) + " " + CONFIG.annee;
+    $("#total").textContent = fmt(total());
+    majBouton();
+  }
+
+  function majBouton() {
+    const b = $("#payer");
+    if (etat.occupe) {
+      b.disabled = true;
+      b.textContent = "Ouverture du paiement…";
+      return;
+    }
+    b.disabled = false;
+    const t = total();
+    b.innerHTML = cadenas + "<span>" + (t > 0 ? "Payer " + esc(fmt(t)) : "Payer") + "</span>";
+  }
+
+  /* ---------- Alertes ---------- */
+  function afficherAlerte(type, texte, source) {
+    const a = $("#alerte");
+    a.className = "alerte " + type;
+    a.textContent = texte;
+    a.dataset.source = source || "";
+    a.hidden = false;
+  }
+  // Retire le message "champs à corriger" dès que tout est corrigé
+  function majAlerteValidation() {
+    if ($("#alerte").dataset.source === "validation" && !document.querySelector(".invalide")) cacherAlerte();
+  }
+  const cacherAlerte = () => { $("#alerte").hidden = true; };
+
+  /* ---------- Validation ---------- */
+  function marquer(el, ok) {
+    el.closest(".champ").classList.toggle("invalide", !ok);
+    if (ok) el.removeAttribute("aria-invalid"); else el.setAttribute("aria-invalid", "true");
+    return ok;
+  }
+  function telNormalise() {
+    let d = $("#p-tel").value.replace(/\D/g, "");
+    if (d.length === 13 && d.startsWith("229")) d = d.slice(3);
+    return d;
+  }
+  function valider() {
+    const invalides = [];
+    etat.eleves.forEach((e, i) => {
+      const n = $("#e-nom-" + i), c = $("#e-classe-" + i);
+      if (!marquer(n, e.nom.trim().length >= 2)) invalides.push(n);
+      if (!marquer(c, !!e.classe)) invalides.push(c);
+    });
+    if (!contributionChoisie()) {
+      const m = $("#montant-libre"), v = montantLibre(), min = CONFIG.montantLibre.minimum;
+      $("#err-libre").textContent = v ? "Le montant minimum est de " + fmt(min) + "." : "Indiquez le montant à payer.";
+      if (!marquer(m, v >= min)) invalides.push(m);
+    }
+    const nom = $("#p-nom"), pre = $("#p-prenom"), tel = $("#p-tel"), mail = $("#p-email");
+    if (!marquer(nom, nom.value.trim().length >= 2)) invalides.push(nom);
+    if (!marquer(pre, pre.value.trim().length >= 2)) invalides.push(pre);
+    if (!marquer(tel, /^01\d{8}$/.test(telNormalise()))) invalides.push(tel);
+    const m = mail.value.trim();
+    if (!marquer(mail, !m || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(m))) invalides.push(mail);
+
+    if (invalides.length) {
+      afficherAlerte("erreur", invalides.length === 1
+        ? "Un champ est à corriger avant de payer."
+        : invalides.length + " champs sont à corriger avant de payer.", "validation");
+      invalides[0].focus();
+      return false;
+    }
+    cacherAlerte();
+    return true;
+  }
+
+  $("#formulaire").addEventListener("input", ev => {
+    const ch = ev.target.closest(".champ");
+    if (ch) { ch.classList.remove("invalide"); ev.target.removeAttribute("aria-invalid"); }
+    majAlerteValidation();
+  });
+  $("#p-tel").addEventListener("blur", () => {
+    const d = telNormalise();
+    if (/^\d{10}$/.test(d)) $("#p-tel").value = d.replace(/(\d{2})(?=\d)/g, "$1 ");
+  });
+
+  /* ---------- Paiement FedaPay ---------- */
+  $("#formulaire").addEventListener("submit", ev => { ev.preventDefault(); payer(); });
+
+  function payer() {
+    if (etat.occupe || !valider()) return;
+
+    const c = contributionChoisie();
+    const t = total();
+    const eleves = etat.eleves.map(e => ({ nom: e.nom.trim(), classe: e.classe }));
+    const parent = {
+      nom: $("#p-nom").value.trim(),
+      prenom: $("#p-prenom").value.trim(),
+      tel: telNormalise(),
+      email: $("#p-email").value.trim()
+    };
+    const libelle = c ? c.libelle : CONFIG.montantLibre.libelle;
+    const description = (libelle + " " + CONFIG.annee + " – " + eleves.length + " enfant" + (eleves.length > 1 ? "s" : "") + " – " + CONFIG.ecole).slice(0, 200);
+    const recu = { libelle, total: t, eleves, parent };
+
+    if (modeDemo) {
+      etat.occupe = true; majBouton();
+      setTimeout(() => {
+        etat.occupe = false; majBouton();
+        afficherRecu(recu, { id: "DEMO-" + String(Date.now()).slice(-6), demo: true });
+      }, 900);
+      return;
+    }
+
+    if (typeof window.FedaPay === "undefined") {
+      afficherAlerte("erreur", "Le module de paiement FedaPay ne s'est pas chargé. Vérifiez votre connexion internet, puis rechargez la page.");
+      return;
+    }
+
+    const customer = {
+      firstname: parent.prenom,
+      lastname: parent.nom,
+      phone_number: { number: "+229" + parent.tel, country: "bj" }
+    };
+    if (parent.email) customer.email = parent.email;
+
+    etat.occupe = true; majBouton(); cacherAlerte();
+
+    try {
+      const widget = FedaPay.init({
+        public_key: CONFIG.fedapay.public_key,
+        environment: CONFIG.fedapay.environment,
+        locale: "fr",
+        transaction: {
+          amount: t,
+          description,
+          custom_metadata: {
+            ecole: CONFIG.ecole,
+            annee_scolaire: CONFIG.annee,
+            contribution: c ? c.id : "libre",
+            nombre_enfants: String(eleves.length),
+            enfants: eleves.map(e => e.nom + " (" + e.classe + ")").join(" ; "),
+            parent: parent.nom + " " + parent.prenom,
+            telephone: "+229" + parent.tel
+          }
+        },
+        customer,
+        onComplete: function (a, b) { finPaiement(a, b, recu); }
+      });
+      widget.open();
+    } catch (err) {
+      console.error(err);
+      etat.occupe = false; majBouton();
+      afficherAlerte("erreur", "La fenêtre de paiement n'a pas pu s'ouvrir. Réessayez dans un instant.");
+    }
+  }
+
+  // onComplete reçoit { reason, transaction } (ou reason, transaction selon la version)
+  function finPaiement(a, b, recu) {
+    const reason = (a && typeof a === "object" && "reason" in a) ? a.reason : a;
+    const tx = (a && typeof a === "object" && a.transaction) || b || null;
+    const statut = tx && tx.status;
+
+    etat.occupe = false; majBouton();
+
+    if (statut === "approved") return afficherRecu(recu, tx);
+
+    if (statut === "pending" && reason === FedaPay.CHECKOUT_COMPLETED) {
+      return afficherAlerte("attente", "Paiement en attente de confirmation. Validez la demande sur votre téléphone. Ne relancez pas un nouveau paiement tout de suite.");
+    }
+    if (reason === FedaPay.DIALOG_DISMISSED && (!statut || statut === "pending")) {
+      return afficherAlerte("info", "Fenêtre de paiement fermée. Vos informations sont conservées : cliquez sur « Payer » pour reprendre.");
+    }
+    afficherAlerte("erreur", "Le paiement n'a pas été validé. Vérifiez le solde de votre compte Mobile Money, puis réessayez.");
+  }
+
+  /* ---------- Reçu ---------- */
+  function afficherRecu(recu, tx) {
+    const lignes = [];
+    if (tx.reference) lignes.push(["Référence", tx.reference]);
+    lignes.push(["N° de transaction", String(tx.id)]);
+    lignes.push(["Date", new Date().toLocaleString("fr-FR", { dateStyle: "long", timeStyle: "short" })]);
+    lignes.push(["Payé par", recu.parent.nom + " " + recu.parent.prenom]);
+    lignes.push(["Téléphone", "+229 " + recu.parent.tel.replace(/(\d{2})(?=\d)/g, "$1 ")]);
+    lignes.push(["Objet", recu.libelle + " " + CONFIG.annee]);
+    recu.eleves.forEach((e, i) => lignes.push([i === 0 ? (recu.eleves.length > 1 ? "Enfants" : "Enfant") : "", e.nom + " – " + e.classe]));
+
+    $("#recu-details").innerHTML =
+      lignes.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join("") +
+      `<dt class="dt-total">Montant</dt><dd class="dd-total">${esc(fmt(recu.total))}</dd>`;
+    $("#recu-ecole").textContent = CONFIG.ecole;
+
+    const tampon = $("#tampon");
+    tampon.textContent = tx.demo ? "Démo" : "Payé";
+    tampon.classList.toggle("demo-tampon", !!tx.demo);
+    tampon.style.animation = "none"; void tampon.offsetWidth; tampon.style.animation = "";
+
+    $("#page").hidden = true;
+    $("#chapo").hidden = true;
+    $("#succes").hidden = false;
+    window.scrollTo(0, 0);
+    $("#succes").focus({ preventScroll: true });
+  }
+
+  $("#imprimer").addEventListener("click", () => window.print());
+  $("#nouveau").addEventListener("click", () => {
+    etat.eleves = [{ nom: "", classe: "" }];   // on garde les infos du parent
+    $("#montant-libre").value = "";
+    rendreEleves(); rendreOptions(); rendreRecap(); cacherAlerte();
+    $("#succes").hidden = true;
+    $("#page").hidden = false;
+    $("#chapo").hidden = false;
+    window.scrollTo(0, 0);
+    $("#e-nom-0").focus();
+  });
+
+  /* ---------- Démarrage ---------- */
+  rendreEleves();
+  rendreOptions();
+  rendreRecap();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Installation dans un sous-dossier (ex. XAMPP : http://localhost/paiement).
+# Tout est renvoyé vers public/ : le code, la config et le .env ne sont jamais servis.
+# En production, pointez plutôt la racine du site (DocumentRoot) directement sur public/.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+<IfModule !mod_rewrite.c>
+    Require all denied
+</IfModule>
