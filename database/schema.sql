@@ -1,9 +1,7 @@
 -- Schéma de la base (MySQL 8 / MariaDB 10.4+).
 -- Installation : mysql -u root < database/schema.sql
 
-CREATE DATABASE IF NOT EXISTS contribution_scolaire
-    CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE contribution_scolaire;
+
 
 CREATE TABLE IF NOT EXISTS paiements (
     id                      INT UNSIGNED NOT NULL AUTO_INCREMENT,

@@ -106,8 +106,8 @@ final class Application
     {
         return new AdminController(
             $this->vue,
-            $this->depot(),
-            $this->serviceOuNull(),
+            fn (): DepotPaiements => $this->depot(),
+            fn (): ?ServicePaiement => $this->serviceOuNull(),
             $this->ecole,
             $this->config['admin'] ?? [],
             $this->config['url'],

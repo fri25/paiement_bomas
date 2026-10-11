@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use Closure;
 use App\Domaine\StatutPaiement;
 use App\Http\Csrf;
 use App\Http\HttpException;
@@ -22,8 +23,8 @@ final class AdminController
      */
     public function __construct(
         private readonly Vue $vue,
-        private readonly DepotPaiements $depot,
-        private readonly ?ServicePaiement $service,
+        private readonly DepotPaiements|Closure $depot,
+        private readonly ServicePaiement|Closure|null $service,
         private readonly array $ecole,
         private readonly array $configAdmin,
         private readonly string $urlApplication,
@@ -49,16 +50,16 @@ final class AdminController
         $page = max(1, (int) ($requete->query['page'] ?? 1));
         $limite = 20;
 
-        $total = $this->depot->compter($filtres);
+        $total = $this->depot()->compter($filtres);
         $totalPages = max(1, (int) ceil($total / $limite));
         if ($page > $totalPages) {
             $page = $totalPages;
         }
         $decalage = ($page - 1) * $limite;
 
-        $paiements = $this->depot->tous($filtres, $limite, $decalage);
-        $statistiques = $this->depot->statistiques($this->ecole['annee']);
-        $recensementClasses = $this->depot->recensementParClasse($this->ecole['annee'], $this->ecole['classes'] ?? []);
+        $paiements = $this->depot()->tous($filtres, $limite, $decalage);
+        $statistiques = $this->depot()->statistiques($this->ecole['annee']);
+        $recensementClasses = $this->depot()->recensementParClasse($this->ecole['annee'], $this->ecole['classes'] ?? []);
         $flashes = AdminAuth::consommerFlashes();
 
         return Response::html($this->vue->rendre('admin/index', [
@@ -135,19 +136,20 @@ final class AdminController
         Csrf::verifier($requete);
 
         $reference = (string) ($parametres['reference'] ?? '');
-        $paiement = $this->depot->parReference($reference);
+        $paiement = $this->depot()->parReference($reference);
         if ($paiement === null) {
             AdminAuth::ajouterFlash('erreur', "Paiement $reference introuvable.");
             return Response::redirection($this->url('/admin'));
         }
 
-        if ($this->service === null) {
+        $service = $this->service();
+        if ($service === null) {
             AdminAuth::ajouterFlash('erreur', "Synchronisation impossible : les clés FedaPay ne sont pas configurées.");
             return Response::redirection($this->url('/admin'));
         }
 
         $ancienStatut = $paiement->statut->libelle();
-        $actualise = $this->service->actualiser($paiement);
+        $actualise = $service->actualiser($paiement);
         $nouveauStatut = $actualise->statut->libelle();
 
         if ($ancienStatut !== $nouveauStatut) {
@@ -179,7 +181,7 @@ final class AdminController
             'date_fin'     => trim((string) ($requete->query['date_fin'] ?? '')),
         ];
 
-        $paiements = $this->depot->tous($filtres, 5000, 0);
+        $paiements = $this->depot()->tous($filtres, 5000, 0);
 
         $fichier = fopen('php://temp', 'r+');
         if ($fichier === false) {
@@ -269,7 +271,7 @@ final class AdminController
             return Response::redirection($this->url('/admin#classe-' . $classe));
         }
 
-        $nbAjoutes = $this->depot->ajouterEleves($classe, $this->ecole['annee'], $noms);
+        $nbAjoutes = $this->depot()->ajouterEleves($classe, $this->ecole['annee'], $noms);
 
         if ($nbAjoutes > 0) {
             AdminAuth::ajouterFlash('succes', sprintf('%d élève(s) ajouté(s) avec succès au recensement de la classe %s.', $nbAjoutes, $classe));
@@ -290,7 +292,7 @@ final class AdminController
         Csrf::verifier($requete);
 
         $id = (int) ($parametres['id'] ?? 0);
-        if ($id > 0 && $this->depot->supprimerEleve($id)) {
+        if ($id > 0 && $this->depot()->supprimerEleve($id)) {
             AdminAuth::ajouterFlash('info', 'Élève retiré du recensement.');
         } else {
             AdminAuth::ajouterFlash('erreur', 'Impossible de retirer cet élève (introuvable).');
@@ -302,5 +304,15 @@ final class AdminController
     private function url(string $chemin = ''): string
     {
         return $this->urlApplication . $chemin;
+    }
+
+    private function depot(): DepotPaiements
+    {
+        return $this->depot instanceof Closure ? ($this->depot)() : $this->depot;
+    }
+
+    private function service(): ?ServicePaiement
+    {
+        return $this->service instanceof Closure ? ($this->service)() : $this->service;
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Infrastructure;
 
+use App\Application;
 use App\Controller\AdminController;
 use App\Http\Csrf;
 use App\Http\Request;
@@ -102,6 +103,55 @@ final class AdminControllerTest extends TestCase
         self::assertSame(200, $reponse->statut);
         self::assertStringContainsString('Espace Direction', $reponse->contenu);
         self::assertStringContainsString('Mot de passe Direction', $reponse->contenu);
+    }
+
+    public function testPageConnexionNeNecessitePasLaBaseDeDonnees(): void
+    {
+        $vue = new Vue(dirname(__DIR__, 2) . '/templates', [
+            'ecole' => $this->ecole,
+            'url'   => fn (string $ch = '') => 'http://localhost/paiement' . $ch,
+            'asset' => fn (string $ch) => 'http://localhost/paiement/assets/' . $ch,
+        ]);
+        $controleur = new AdminController(
+            $vue,
+            static fn (): DepotPaiements => throw new \RuntimeException('La base ne doit pas être appelée.'),
+            null,
+            $this->ecole,
+            ['password' => 'secret'],
+            'http://localhost/paiement',
+        );
+
+        $reponse = $controleur->pageConnexion(new Request('GET', '/admin/connexion'));
+
+        self::assertSame(200, $reponse->statut);
+        self::assertStringContainsString('Espace Direction', $reponse->contenu);
+    }
+
+    public function testRouteConnexionResteDisponibleSiLaBaseEstInaccessible(): void
+    {
+        $application = new Application([
+            'debug' => false,
+            'url' => 'https://ecole.example',
+            'log' => sys_get_temp_dir() . '/paiement-test.log',
+            'db' => [
+                'host' => '127.0.0.1',
+                'port' => 1,
+                'name' => 'indisponible',
+                'user' => 'indisponible',
+                'password' => '',
+            ],
+            'fedapay' => [
+                'secret_key' => '',
+                'environment' => 'live',
+                'webhook_secret' => '',
+            ],
+            'admin' => ['password' => 'secret'],
+        ], $this->ecole);
+
+        $reponse = $application->traiter(new Request('GET', '/admin/connexion'));
+
+        self::assertSame(200, $reponse->statut);
+        self::assertStringContainsString('Espace Direction', $reponse->contenu);
     }
 
     public function testConnexionEchoueeAvecMauvaisMotDePasse(): void
