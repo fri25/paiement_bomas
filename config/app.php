@@ -25,7 +25,7 @@ return [
     ],
 
     'admin' => [
-        'password' => Env::get('ADMIN_PASSWORD', 'directeur2026'),
+        'password' => Env::get('ADMIN_PASSWORD', ''),
     ],
 
     'log' => BASE_PATH . '/storage/logs/app.log',

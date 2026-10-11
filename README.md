@@ -100,3 +100,32 @@ docs/                   Maquette d'origine (fichier HTML unique), pour référen
 4. Dans le tableau de bord FedaPay, créez un webhook vers `{APP_URL}/webhooks/fedapay` et copiez son secret dans `FEDAPAY_WEBHOOK_SECRET`.
 5. Créez un utilisateur MySQL dédié, limité à `SELECT, INSERT, UPDATE` sur la base, plutôt que `root`.
 6. `storage/logs/` doit être accessible en écriture par le serveur web.
+
+### Déploiement sur Alwaysdata
+
+1. Dans Alwaysdata, créez un site de type **PHP** et choisissez PHP 8.2 ou supérieur. Réglez le chemin du site sur le dossier `public` du projet, par exemple `/home/COMPTE/www/paiement/public` si le dépôt est cloné dans `www/paiement`.
+2. Déployez le dépôt dans `/home/COMPTE/www/paiement` (par SSH/Git ou SFTP). La racine web doit rester `.../paiement/public`, pas le dossier du dépôt.
+3. Dans la rubrique **Bases de données**, créez une base MySQL et un utilisateur, puis accordez-lui les droits sur cette base. Importez les instructions `CREATE TABLE` de `database/schema.sql` dans la base choisie. Dans phpMyAdmin, sélectionnez d'abord la base Alwaysdata et ne lancez pas les deux instructions initiales `CREATE DATABASE` et `USE contribution_scolaire` du fichier.
+4. Créez `.env` à la racine du projet (au même niveau que `bootstrap.php`), ou configurez les variables d'environnement du site. Renseignez les valeurs fournies par Alwaysdata et FedaPay :
+
+  ```dotenv
+  APP_ENV=production
+  APP_DEBUG=false
+  APP_URL=https://VOTRE-DOMAINE
+  DB_HOST=HOTE_MYSQL_ALWAYSDATA
+  DB_PORT=3306
+  DB_NAME=NOM_BASE_ALWAYSDATA
+  DB_USER=UTILISATEUR_MYSQL_ALWAYSDATA
+  DB_PASSWORD=MOT_DE_PASSE_MYSQL
+  FEDAPAY_SECRET_KEY=CLE_SECRETE_FEDAPAY
+  FEDAPAY_ENVIRONMENT=live
+  FEDAPAY_WEBHOOK_SECRET=SECRET_WEBHOOK_FEDAPAY
+  ADMIN_PASSWORD=MOT_DE_PASSE_ADMIN_UNIQUE
+  ```
+
+  `.env` est exclu de Git. Ne placez jamais de clé ni de mot de passe dans un fichier public ou dans le dépôt.
+5. Vérifiez que PHP dispose de `curl`, `json` et `pdo_mysql`, et que `storage/logs/` est accessible en écriture par le compte du site. Le projet n'a pas de dépendance Composer nécessaire en production.
+6. Activez le HTTPS dans Alwaysdata. Dans FedaPay, configurez le webhook `https://VOTRE-DOMAINE/webhooks/fedapay` et un retour vers `APP_URL`.
+7. Testez la page d'accueil et `/admin/connexion`, puis effectuez un paiement de test avec des clés FedaPay sandbox avant de basculer les clés et l'environnement en `live`.
+
+**Sécurité :** si un mot de passe admin ou une clé FedaPay a déjà été utilisé et divulgué, remplacez-le avant la mise en ligne. Sans `ADMIN_PASSWORD`, la connexion à l'administration reste désactivée.
