@@ -12,9 +12,12 @@ return [
     'classes' => ['CI', 'CP', 'CE1', 'CE2', 'CM1', 'CM2'],
 
     // par_eleve: true => montant multiplié par le nombre d'enfants
+    // montant: un entier (même prix pour tous) ou un tableau classe => montant (prix selon la classe de chaque enfant)
     'contributions' => [
-        ['id' => 'annuelle',  'libelle' => 'Contribution annuelle',     'detail' => "Toute l'année scolaire", 'montant' => 15000, 'par_eleve' => true],
-        ['id' => 'trimestre', 'libelle' => 'Contribution du trimestre', 'detail' => '1er trimestre',          'montant' => 5000,  'par_eleve' => true],
+        [
+            'id' => 'annuelle', 'libelle' => 'Contribution annuelle', 'detail' => "Toute l'année scolaire", 'par_eleve' => true,
+            'montant' => ['CI' => 20000, 'CP' => 20000, 'CE1' => 22000, 'CE2' => 22000, 'CM1' => 25000, 'CM2' => 25000],
+        ],
     ],
 
     'montant_libre' => [

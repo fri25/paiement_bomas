@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use Closure;
+use App\Domaine\ErreurValidation;
+use App\Domaine\ModePaiement;
 use App\Domaine\StatutPaiement;
+use App\Domaine\Tarification;
+use App\Domaine\ValidateurDemande;
 use App\Http\Csrf;
 use App\Http\HttpException;
 use App\Http\Request;
@@ -25,6 +29,8 @@ final class AdminController
         private readonly Vue $vue,
         private readonly DepotPaiements|Closure $depot,
         private readonly ServicePaiement|Closure|null $service,
+        private readonly ValidateurDemande $validateur,
+        private readonly Tarification $tarification,
         private readonly array $ecole,
         private readonly array $configAdmin,
         private readonly string $urlApplication,
@@ -124,6 +130,72 @@ final class AdminController
         AdminAuth::deconnecter();
         AdminAuth::ajouterFlash('info', 'Vous avez été déconnecté avec succès.');
         return Response::redirection($this->url('/admin/connexion'));
+    }
+
+    /**
+     * POST /admin/paiements/guichet : paiement enregistré par la Direction, sans FedaPay.
+     *  - espèces : le parent paie maintenant au bureau (pas de portable, pas de Mobile Money) ;
+     *  - antérieur : le parent avait déjà payé avant la mise en service de la plateforme.
+     * Le paiement est enregistré directement comme payé, puis le reçu s'ouvre pour impression.
+     */
+    public function encaisserAuGuichet(Request $requete): Response
+    {
+        if (!AdminAuth::estConnecte()) {
+            return Response::redirection($this->url('/admin/connexion'));
+        }
+
+        Csrf::verifier($requete);
+
+        $donnees = $requete->post;
+        // Le formulaire propose plusieurs lignes d'enfants : on ignore celles laissées vides.
+        $donnees['eleves'] = array_values(array_filter(
+            is_array($donnees['eleves'] ?? null) ? $donnees['eleves'] : [],
+            static fn (mixed $e): bool => is_array($e) && trim((string) ($e['nom'] ?? '')) . trim((string) ($e['classe'] ?? '')) !== '',
+        ));
+
+        $mode = ModePaiement::tryFrom((string) ($donnees['mode'] ?? ''));
+        $erreurs = [];
+        if ($mode === null || !$mode->estAuGuichet()) {
+            $erreurs[] = 'Choisissez le mode de paiement.';
+        }
+
+        // Date du paiement antérieur (facultative) : jamais dans le futur.
+        $payeLe = null;
+        $date = trim((string) ($donnees['date_paiement'] ?? ''));
+        if ($mode === ModePaiement::Anterieur && $date !== '') {
+            $payeLe = \DateTimeImmutable::createFromFormat('!Y-m-d', $date) ?: null;
+            if ($payeLe === null || $payeLe > new \DateTimeImmutable('today')) {
+                $erreurs[] = 'La date du paiement est invalide.';
+            }
+        }
+
+        try {
+            $demande = $this->validateur->valider($donnees, telephoneObligatoire: false);
+        } catch (ErreurValidation $e) {
+            $erreurs = array_merge($erreurs, array_values($e->erreurs));
+        }
+
+        if ($erreurs !== []) {
+            AdminAuth::ajouterFlash('erreur', 'Paiement non enregistré : ' . implode(' ', array_unique($erreurs)));
+            return Response::redirection($this->url('/admin'));
+        }
+
+        $paiement = $this->depot()->creer(
+            $demande,
+            $this->tarification->libelle($demande->contribution),
+            $this->ecole['annee'],
+            $this->tarification->montant($demande),
+            $mode,
+            $payeLe,
+        );
+
+        AdminAuth::ajouterFlash('succes', sprintf(
+            'Paiement de %s enregistré : %s (référence %s).',
+            fcfa($paiement->montant),
+            mb_strtolower($mode->libelle()),
+            $paiement->reference,
+        ));
+        return Response::redirection($this->url('/recu/' . rawurlencode($paiement->reference)));
     }
 
     /** POST /admin/paiements/{reference}/synchroniser : Actualise le statut d'un paiement chez FedaPay. */

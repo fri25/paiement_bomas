@@ -14,6 +14,7 @@ final class TarificationTest extends TestCase
         'contributions' => [
             ['id' => 'annuelle', 'libelle' => 'Annuelle', 'detail' => '', 'montant' => 15000, 'par_eleve' => true],
             ['id' => 'forfait',  'libelle' => 'Forfait',  'detail' => '', 'montant' => 7000,  'par_eleve' => false],
+            ['id' => 'classe',   'libelle' => 'Classe',   'detail' => '', 'montant' => ['CI' => 20000, 'CE1' => 22000, 'CM2' => 25000], 'par_eleve' => true],
         ],
         'montant_libre' => ['actif' => true, 'libelle' => 'Autre montant'],
     ];
@@ -32,6 +33,14 @@ final class TarificationTest extends TestCase
     public function testForfaitNeDependPasDuNombreDEnfants(): void
     {
         self::assertSame(7000, (new Tarification(self::ECOLE))->montant($this->demande('forfait', 3)));
+    }
+
+    public function testMontantSelonLaClasseDeChaqueEnfant(): void
+    {
+        $eleves = [['nom' => 'A', 'classe' => 'CI'], ['nom' => 'B', 'classe' => 'CE1'], ['nom' => 'C', 'classe' => 'CM2']];
+        $demande = new DemandePaiement($eleves, 'classe', null, ['nom' => 'X', 'prenom' => 'Y', 'telephone' => '0197000000', 'email' => '']);
+
+        self::assertSame(67000, (new Tarification(self::ECOLE))->montant($demande));
     }
 
     public function testMontantLibre(): void

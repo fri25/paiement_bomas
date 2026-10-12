@@ -9,7 +9,7 @@
  * @var array<string, string> $filtres
  * @var array{page: int, totalPages: int, total: int, limite: int} $pagination
  * @var list<string> $classes
- * @var list<array{id: string, libelle: string}> $contributions
+ * @var list<array{id: string, libelle: string, montant: int|array<string, int>, par_eleve: bool}> $contributions
  * @var list<array{type: string, message: string}> $flashes
  * @var string $csrf
  */
@@ -108,6 +108,13 @@ $urlExportCsv = $url('/admin/export' . ($filtres !== [] ? '?' . http_build_query
           <line x1="23" y1="11" x2="17" y2="11"></line>
         </svg>
         + Recenser des élèves
+      </button>
+      <button type="button" class="btn-recenser-principal btn-guichet" onclick="ouvrirModalGuichet()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="6" width="20" height="12" rx="2"></rect>
+          <circle cx="12" cy="12" r="2.5"></circle>
+        </svg>
+        Paiement au bureau / déjà payé
       </button>
     </div>
 
@@ -403,9 +410,13 @@ $urlExportCsv = $url('/admin/export' . ($filtres !== [] ? '?' . http_build_query
 
                 <td class="col-parent">
                   <span class="nom-parent"><?= e($p->parentPrenom . ' ' . $p->parentNom) ?></span>
-                  <a href="tel:+229<?= e($p->parentTelephone) ?>" class="tel-parent" title="Appeler le parent">
-                    <?= telephone_lisible($p->parentTelephone) ?>
-                  </a>
+                  <?php if ($p->parentTelephone !== ''): ?>
+                    <a href="tel:+229<?= e($p->parentTelephone) ?>" class="tel-parent" title="Appeler le parent">
+                      <?= telephone_lisible($p->parentTelephone) ?>
+                    </a>
+                  <?php else: ?>
+                    <span class="email-parent">Sans téléphone</span>
+                  <?php endif ?>
                   <?php if ($p->parentEmail !== ''): ?>
                     <span class="email-parent"><?= e($p->parentEmail) ?></span>
                   <?php endif ?>
@@ -414,6 +425,9 @@ $urlExportCsv = $url('/admin/export' . ($filtres !== [] ? '?' . http_build_query
                 <td class="col-contribution">
                   <span class="libelle-contribution"><?= e($p->libelle) ?></span>
                   <span class="annee-contribution"><?= e($p->annee) ?></span>
+                  <?php if ($p->mode->estAuGuichet()): ?>
+                    <span class="badge-mode"><?= e($p->mode->libelle()) ?></span>
+                  <?php endif ?>
                 </td>
 
                 <td class="col-montant col-droite">
@@ -472,7 +486,8 @@ $urlExportCsv = $url('/admin/export' . ($filtres !== [] ? '?' . http_build_query
                         'libelle'        => $p->libelle,
                         'annee'          => $p->annee,
                         'parentNom'      => $p->parentPrenom . ' ' . $p->parentNom,
-                        'parentTel'      => telephone_lisible($p->parentTelephone),
+                        'parentTel'      => $p->parentTelephone !== '' ? telephone_lisible($p->parentTelephone) : 'Non renseigné',
+                        'mode'           => $p->mode->libelle(),
                         'parentEmail'    => $p->parentEmail ?: 'Non renseigné',
                         'eleves'         => $p->eleves,
                         'transactionId'  => $p->transactionId ?: 'Aucune',
@@ -540,6 +555,7 @@ $urlExportCsv = $url('/admin/export' . ($filtres !== [] ? '?' . http_build_query
         <dl class="grille-detail">
           <dt>Montant :</dt><dd id="modal-montant" class="texte-gras"></dd>
           <dt>Type :</dt><dd id="modal-libelle"></dd>
+          <dt>Mode :</dt><dd id="modal-mode"></dd>
           <dt>Année :</dt><dd id="modal-annee"></dd>
           <dt>Créé le :</dt><dd id="modal-cree-le"></dd>
           <dt>Payé le :</dt><dd id="modal-paye-le"></dd>
@@ -625,7 +641,163 @@ $urlExportCsv = $url('/admin/export' . ($filtres !== [] ? '?' . http_build_query
   </div>
 </dialog>
 
+<!-- Modale : paiement au bureau (espèces) ou paiement fait avant la plateforme -->
+<dialog id="modal-guichet" class="modal-dialog">
+  <div class="modal-contenu">
+    <div class="modal-entete">
+      <div>
+        <h3 class="modal-titre">Enregistrer un paiement</h3>
+        <p class="sous-titre" style="margin:0; font-size:14px; color:var(--gris);">Pour les parents qui paient au bureau, ou qui avaient déjà payé avant la plateforme. Le paiement est enregistré comme payé, sans passer par FedaPay.</p>
+      </div>
+      <button type="button" class="btn-fermer-modal" onclick="document.getElementById('modal-guichet').close()" aria-label="Fermer la boîte de dialogue">✕</button>
+    </div>
+
+    <form method="post" action="<?= e($url('/admin/paiements/guichet')) ?>" id="form-guichet">
+      <?= \App\Http\Csrf::champ() ?>
+
+      <div class="modal-corps">
+        <fieldset class="guichet-bloc">
+          <legend>Mode de paiement</legend>
+          <label class="guichet-radio"><input type="radio" name="mode" value="especes" checked> Payé en espèces aujourd'hui, au bureau</label>
+          <label class="guichet-radio"><input type="radio" name="mode" value="anterieur"> Déjà payé avant la plateforme</label>
+          <div class="champ" id="guichet-champ-date" hidden>
+            <label for="guichet-date">Date du paiement (facultatif)</label>
+            <input type="date" id="guichet-date" name="date_paiement" max="<?= e(date('Y-m-d')) ?>">
+          </div>
+        </fieldset>
+
+        <fieldset class="guichet-bloc">
+          <legend>Enfant(s)</legend>
+          <?php for ($i = 0; $i < (int) $ecole['max_eleves']; $i++): ?>
+            <div class="eleve-champs guichet-eleve" <?= $i > 0 ? 'hidden' : '' ?>>
+              <div class="champ">
+                <label for="guichet-eleve-<?= $i ?>">Nom et prénoms</label>
+                <input id="guichet-eleve-<?= $i ?>" name="eleves[<?= $i ?>][nom]" maxlength="120" autocomplete="off" <?= $i === 0 ? 'required' : '' ?>>
+              </div>
+              <div class="champ">
+                <label for="guichet-classe-<?= $i ?>">Classe</label>
+                <select id="guichet-classe-<?= $i ?>" name="eleves[<?= $i ?>][classe]" <?= $i === 0 ? 'required' : '' ?>>
+                  <option value="">Choisir</option>
+                  <?php foreach ($classes as $classe): ?>
+                    <option value="<?= e($classe) ?>"><?= e($classe) ?></option>
+                  <?php endforeach ?>
+                </select>
+              </div>
+            </div>
+          <?php endfor ?>
+          <button type="button" class="secondaire" id="guichet-ajouter">+ Ajouter un enfant</button>
+        </fieldset>
+
+        <fieldset class="guichet-bloc">
+          <legend>Contribution</legend>
+          <div class="champ">
+            <select name="contribution" id="guichet-contribution" aria-label="Contribution">
+              <?php foreach ($contributions as $c): ?>
+                <option value="<?= e($c['id']) ?>"><?= e($c['libelle']) ?></option>
+              <?php endforeach ?>
+              <?php if (!empty($ecole['montant_libre']['actif'])): ?>
+                <option value="libre"><?= e($ecole['montant_libre']['libelle']) ?></option>
+              <?php endif ?>
+            </select>
+          </div>
+          <div class="champ" id="guichet-champ-libre" hidden>
+            <label for="guichet-montant">Montant reçu (FCFA)</label>
+            <input id="guichet-montant" name="montant_libre" inputmode="numeric" autocomplete="off" placeholder="Ex. 10 000">
+          </div>
+          <p class="guichet-total">Montant : <strong id="guichet-total">—</strong></p>
+        </fieldset>
+
+        <fieldset class="guichet-bloc">
+          <legend>Parent</legend>
+          <div class="guichet-deux">
+            <div class="champ">
+              <label for="guichet-parent-nom">Nom</label>
+              <input id="guichet-parent-nom" name="parent[nom]" maxlength="80" required>
+            </div>
+            <div class="champ">
+              <label for="guichet-parent-prenom">Prénoms</label>
+              <input id="guichet-parent-prenom" name="parent[prenom]" maxlength="80" required>
+            </div>
+          </div>
+          <div class="champ">
+            <label for="guichet-parent-tel">Téléphone (facultatif)</label>
+            <input id="guichet-parent-tel" name="parent[telephone]" inputmode="tel" placeholder="01 97 00 00 00">
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="modal-pied">
+        <button type="submit" class="payer" style="min-height: 44px; font-size: 15px;">
+          Enregistrer et afficher le reçu
+        </button>
+        <button type="button" class="secondaire" style="min-height: 44px;" onclick="document.getElementById('modal-guichet').close()">
+          Annuler
+        </button>
+      </div>
+    </form>
+  </div>
+</dialog>
+
+<script type="application/json" id="guichet-tarifs"><?= json_encode(
+    array_column($contributions, 'montant', 'id'),
+    JSON_HEX_TAG | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE,
+) ?></script>
+
 <script>
+function ouvrirModalGuichet() {
+  var dialog = document.getElementById('modal-guichet');
+  if (!dialog) return;
+  if (typeof dialog.showModal === 'function') {
+    dialog.showModal();
+  } else {
+    dialog.setAttribute('open', 'true');
+  }
+}
+
+(function () {
+  var form = document.getElementById('form-guichet');
+  if (!form) return;
+  var tarifs = JSON.parse(document.getElementById('guichet-tarifs').textContent);
+  var fmt = function (n) { return new Intl.NumberFormat('fr-FR').format(n) + ' FCFA'; };
+
+  // Montant à encaisser, affiché pour la Direction (le serveur le recalcule).
+  function majGuichet() {
+    var mode = form.querySelector('input[name="mode"]:checked').value;
+    document.getElementById('guichet-champ-date').hidden = mode !== 'anterieur';
+
+    var contribution = document.getElementById('guichet-contribution').value;
+    var libre = contribution === 'libre';
+    document.getElementById('guichet-champ-libre').hidden = !libre;
+    document.getElementById('guichet-montant').required = libre;
+
+    var total = 0;
+    if (libre) {
+      total = parseInt((document.getElementById('guichet-montant').value || '').replace(/\D/g, ''), 10) || 0;
+    } else {
+      var tarif = tarifs[contribution];
+      form.querySelectorAll('.guichet-eleve').forEach(function (ligne) {
+        var nom = ligne.querySelector('input').value.trim();
+        var classe = ligne.querySelector('select').value;
+        if (!nom && !classe) return;
+        total += typeof tarif === 'object' ? (tarif[classe] || 0) : tarif;
+      });
+    }
+    document.getElementById('guichet-total').textContent = total ? fmt(total) : '—';
+  }
+  form.addEventListener('input', majGuichet);
+  form.addEventListener('change', majGuichet);
+
+  document.getElementById('guichet-ajouter').addEventListener('click', function () {
+    var cachee = form.querySelector('.guichet-eleve[hidden]');
+    if (!cachee) return;
+    cachee.hidden = false;
+    cachee.querySelector('input').focus();
+    if (!form.querySelector('.guichet-eleve[hidden]')) this.hidden = true;
+  });
+
+  majGuichet();
+})();
+
 function toggleClasse(classe) {
   var tiroir = document.getElementById('tiroir-' + classe);
   var txt = document.getElementById('txt-toggle-' + classe);
@@ -673,6 +845,7 @@ function ouvrirModalDetail(p) {
 
   document.getElementById('modal-montant').textContent = p.montant;
   document.getElementById('modal-libelle').textContent = p.libelle;
+  document.getElementById('modal-mode').textContent = p.mode;
   document.getElementById('modal-annee').textContent = p.annee;
   document.getElementById('modal-cree-le').textContent = p.creeLe;
   document.getElementById('modal-paye-le').textContent = p.payeLe;

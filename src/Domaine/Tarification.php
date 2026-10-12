@@ -14,7 +14,7 @@ final class Tarification
     {
     }
 
-    /** @return array{id: string, libelle: string, detail: string, montant: int, par_eleve: bool}|null */
+    /** @return array{id: string, libelle: string, detail: string, montant: int|array<string, int>, par_eleve: bool}|null */
     public function contribution(string $id): ?array
     {
         foreach ($this->ecole['contributions'] as $contribution) {
@@ -45,6 +45,13 @@ final class Tarification
         $contribution = $this->contribution($demande->contribution);
         if ($contribution === null) {
             return (int) $demande->montantLibre;
+        }
+        if (is_array($contribution['montant'])) {
+            // Tarif par classe : chaque enfant paie le montant de sa classe.
+            return array_sum(array_map(
+                static fn (array $eleve): int => (int) ($contribution['montant'][$eleve['classe']] ?? 0),
+                $demande->eleves,
+            ));
         }
         return $contribution['par_eleve']
             ? $contribution['montant'] * count($demande->eleves)

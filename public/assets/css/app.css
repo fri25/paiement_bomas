@@ -1314,3 +1314,15 @@ a.payer, a.secondaire { display: flex; align-items: center; justify-content: cen
   .table-conteneur { border: 1px solid #000; }
   .table-paiements th, .table-paiements td { border-bottom: 1px solid #ddd; }
 }
+
+/* ---------- Paiement au bureau / déjà payé (Direction) ---------- */
+.btn-guichet { background: var(--vert, #1C7A49); }
+.guichet-bloc { border: 0; padding: 0; margin: 0 0 18px; min-width: 0; }
+.guichet-bloc legend { font-weight: 700; margin-bottom: 8px; padding: 0; }
+.guichet-radio { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; cursor: pointer; }
+.guichet-eleve { margin-bottom: 8px; }
+.guichet-deux { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.guichet-total { margin: 4px 0 0; }
+#guichet-ajouter { min-height: 38px; }
+.badge-mode { display: inline-block; margin-top: 4px; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #EEF2FF; color: #3730A3; }
+@media (max-width: 520px) { .guichet-deux { grid-template-columns: 1fr; } }

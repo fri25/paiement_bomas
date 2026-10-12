@@ -17,8 +17,11 @@ final class ValidateurDemande
     ) {
     }
 
-    /** @param array<string, mixed> $donnees */
-    public function valider(array $donnees): DemandePaiement
+    /**
+     * @param array<string, mixed> $donnees
+     * @param bool $telephoneObligatoire false au guichet : tous les parents n'ont pas de portable
+     */
+    public function valider(array $donnees, bool $telephoneObligatoire = true): DemandePaiement
     {
         $erreurs = [];
 
@@ -73,7 +76,7 @@ final class ValidateurDemande
         if (mb_strlen($prenom) < 2 || mb_strlen($prenom) > 80) {
             $erreurs['parent.prenom'] = 'Indiquez vos prénoms.';
         }
-        if (!preg_match('/^01\d{8}$/', $telephone)) {
+        if (($telephoneObligatoire || $telephone !== '') && !preg_match('/^01\d{8}$/', $telephone)) {
             $erreurs['parent.telephone'] = 'Entrez un numéro à 10 chiffres commençant par 01.';
         }
         if ($email !== '' && (filter_var($email, FILTER_VALIDATE_EMAIL) === false || strlen($email) > 160)) {

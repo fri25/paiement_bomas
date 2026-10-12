@@ -25,6 +25,7 @@ final class Paiement
         public readonly ?string $referenceFedaPay,
         public readonly \DateTimeImmutable $creeLe,
         public readonly ?\DateTimeImmutable $payeLe,
+        public readonly ModePaiement $mode = ModePaiement::EnLigne,
     ) {
     }
 

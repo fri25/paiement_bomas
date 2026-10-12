@@ -73,6 +73,15 @@
   });
 
   /* ---------- Choix de la contribution ---------- */
+  function prixOption(o) {
+    if (o.montant == null) return "<small>Vous choisissez</small>";
+    if (typeof o.montant === "object") {
+      const m = Object.values(o.montant), min = Math.min(...m), max = Math.max(...m);
+      return (min === max ? fmt(min) : "De " + fmt(min) + " à " + fmt(max)) + "<small>par enfant, selon la classe</small>";
+    }
+    return fmt(o.montant) + (o.parEleve ? "<small>par enfant</small>" : "");
+  }
+
   function rendreOptions() {
     const opts = CONFIG.contributions.slice();
     if (CONFIG.montantLibre.actif) opts.push({ id: "libre", libelle: CONFIG.montantLibre.libelle, detail: CONFIG.montantLibre.detail, montant: null });
@@ -80,7 +89,7 @@
       <label class="option ${o.id === etat.contribution ? "choisie" : ""}">
         <input type="radio" name="contribution" value="${esc(o.id)}" ${o.id === etat.contribution ? "checked" : ""}>
         <span><span class="opt-titre">${esc(o.libelle)}</span><small>${esc(o.detail || "")}</small></span>
-        <span class="prix">${o.montant != null ? fmt(o.montant) + (o.parEleve ? "<small>par enfant</small>" : "") : "<small>Vous choisissez</small>"}</span>
+        <span class="prix">${prixOption(o)}</span>
       </label>`).join("");
     $("#champ-libre").hidden = etat.contribution !== "libre";
   }
@@ -103,9 +112,14 @@
     const v = parseInt(($("#montant-libre").value || "").replace(/\D/g, ""), 10);
     return isNaN(v) ? 0 : v;
   }
+  // Montant d'un enfant : tarif de sa classe (0 tant qu'elle n'est pas choisie) ou tarif unique.
+  function montantEleve(c, e) {
+    return typeof c.montant === "object" ? (c.montant[e.classe] || 0) : c.montant;
+  }
+  const parEleve = c => c.parEleve || typeof c.montant === "object";
   function total() {
     const c = contributionChoisie();
-    if (c) return c.parEleve ? c.montant * etat.eleves.length : c.montant;
+    if (c) return parEleve(c) ? etat.eleves.reduce((s, e) => s + montantEleve(c, e), 0) : c.montant;
     return montantLibre();
   }
 
@@ -118,13 +132,13 @@
         <span class="qui ${nom ? "" : "vide"}">${esc(nom || "Enfant " + (i + 1))}</span>
         <span class="detail">
           <em class="classe">${e.classe ? "Classe : " + esc(e.classe) : "Classe à choisir"}</em>
-          <span class="combien">${c && c.parEleve ? esc(fmt(c.montant)) : ""}</span>
+          <span class="combien">${c && parEleve(c) ? (montantEleve(c, e) ? esc(fmt(montantEleve(c, e))) : "…") : ""}</span>
         </span>
       </li>`;
     });
     const ligneMontant = (libelle, montant) =>
       `<li><span class="detail"><em class="classe">${esc(libelle)}</em><span class="combien">${montant}</span></span></li>`;
-    if (c && !c.parEleve) lignes.push(ligneMontant(c.libelle, esc(fmt(c.montant))));
+    if (c && !parEleve(c)) lignes.push(ligneMontant(c.libelle, esc(fmt(c.montant))));
     if (!c) lignes.push(ligneMontant(CONFIG.montantLibre.libelle, montantLibre() ? esc(fmt(montantLibre())) : "…"));
     $("#lignes").innerHTML = lignes.join("");
     $("#recap-contrib").textContent = (c ? c.libelle : CONFIG.montantLibre.libelle) + " " + CONFIG.annee;

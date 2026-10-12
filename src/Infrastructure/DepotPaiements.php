@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Infrastructure;
 
 use App\Domaine\DemandePaiement;
+use App\Domaine\ModePaiement;
 use App\Domaine\Paiement;
 use App\Domaine\StatutPaiement;
 use PDO;
@@ -16,18 +17,34 @@ final class DepotPaiements
     {
     }
 
-    public function creer(DemandePaiement $demande, string $libelle, string $annee, int $montant): Paiement
-    {
+    /**
+     * En ligne : le paiement part en attente de FedaPay.
+     * Au guichet (espèces ou paiement antérieur) : la Direction a déjà reçu l'argent,
+     * il est enregistré directement comme payé, à la date indiquée ($payeLe) ou maintenant.
+     */
+    public function creer(
+        DemandePaiement $demande,
+        string $libelle,
+        string $annee,
+        int $montant,
+        ModePaiement $mode = ModePaiement::EnLigne,
+        ?\DateTimeImmutable $payeLe = null,
+    ): Paiement {
+        $maintenant = date('Y-m-d H:i:s');
+        $statut = $mode->estAuGuichet() ? StatutPaiement::Paye : StatutPaiement::EnAttente;
+
         $this->pdo->beginTransaction();
         try {
             $reference = $this->referenceLibre();
             $this->pdo->prepare(
-                'INSERT INTO paiements (reference, contribution, libelle, annee, montant, statut,
-                    parent_nom, parent_prenom, parent_telephone, parent_email)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO paiements (reference, contribution, libelle, annee, montant, statut, mode_paiement,
+                    parent_nom, parent_prenom, parent_telephone, parent_email, cree_le, maj_le, paye_le)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             )->execute([
-                $reference, $demande->contribution, $libelle, $annee, $montant, StatutPaiement::EnAttente->value,
+                $reference, $demande->contribution, $libelle, $annee, $montant, $statut->value, $mode->value,
                 $demande->parent['nom'], $demande->parent['prenom'], $demande->parent['telephone'], $demande->parent['email'],
+                $maintenant, $maintenant,
+                $statut === StatutPaiement::Paye ? ($payeLe?->format('Y-m-d H:i:s') ?? $maintenant) : null,
             ]);
             $id = (int) $this->pdo->lastInsertId();
 
@@ -137,6 +154,7 @@ final class DepotPaiements
                 $ligne['fedapay_reference'],
                 new \DateTimeImmutable($ligne['cree_le']),
                 $ligne['paye_le'] ? new \DateTimeImmutable($ligne['paye_le']) : null,
+                ModePaiement::tryFrom((string) ($ligne['mode_paiement'] ?? '')) ?? ModePaiement::EnLigne,
             ),
             $lignes
         );
@@ -289,6 +307,7 @@ final class DepotPaiements
             $ligne['fedapay_reference'],
             new \DateTimeImmutable($ligne['cree_le']),
             $ligne['paye_le'] ? new \DateTimeImmutable($ligne['paye_le']) : null,
+            ModePaiement::tryFrom((string) ($ligne['mode_paiement'] ?? '')) ?? ModePaiement::EnLigne,
         );
     }
 
@@ -299,9 +318,14 @@ final class DepotPaiements
      */
     public function recensementParClasse(string $annee, array $classesListe): array
     {
-        $stmtEleves = $this->pdo->prepare('SELECT id, nom, classe, cree_le FROM eleves WHERE annee = ? ORDER BY nom ASC');
-        $stmtEleves->execute([$annee]);
-        $eleves = $stmtEleves->fetchAll();
+        $eleves = [];
+        try {
+            $stmtEleves = $this->pdo->prepare('SELECT id, nom, classe, cree_le FROM eleves WHERE annee = ? ORDER BY nom ASC');
+            $stmtEleves->execute([$annee]);
+            $eleves = $stmtEleves->fetchAll();
+        } catch (\Throwable) {
+            $eleves = [];
+        }
 
         $stmtPaiements = $this->pdo->prepare("
             SELECT pe.nom, pe.classe, p.reference, p.montant, p.statut, p.paye_le, p.cree_le,

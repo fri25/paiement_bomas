@@ -52,8 +52,13 @@ $nbEleves = count($paiement->eleves);
         <dt>N° de transaction</dt><dd><?= e($paiement->transactionId) ?></dd>
         <?php endif ?>
         <dt>Date</dt><dd><?= e($formatDate->format($date)) ?></dd>
+        <?php if ($paiement->mode->estAuGuichet()): ?>
+        <dt>Mode</dt><dd><?= e($paiement->mode->libelle()) ?></dd>
+        <?php endif ?>
         <dt>Payé par</dt><dd><?= e($paiement->parentNom . ' ' . $paiement->parentPrenom) ?></dd>
+        <?php if ($paiement->parentTelephone !== ''): ?>
         <dt>Téléphone</dt><dd><?= e(telephone_lisible($paiement->parentTelephone)) ?></dd>
+        <?php endif ?>
         <dt>Objet</dt><dd><?= e($paiement->libelle . ' ' . $paiement->annee) ?></dd>
         <?php foreach ($paiement->eleves as $i => $eleve): ?>
         <dt><?= $i === 0 ? ($nbEleves > 1 ? 'Enfants' : 'Enfant') : '' ?></dt><dd><?= e($eleve['nom'] . ' – ' . $eleve['classe']) ?></dd>

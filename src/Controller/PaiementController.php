@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use Closure;
 use App\Domaine\ErreurValidation;
 use App\Domaine\StatutPaiement;
 use App\Domaine\ValidateurDemande;
@@ -21,7 +22,7 @@ final class PaiementController
     public function __construct(
         private readonly Vue $vue,
         private readonly ValidateurDemande $validateur,
-        private readonly ServicePaiement $service,
+        private readonly ServicePaiement|Closure $service,
         private readonly DepotPaiements $depot,
     ) {
     }
@@ -33,7 +34,7 @@ final class PaiementController
 
         try {
             $demande = $this->validateur->valider($requete->json());
-            $redirection = $this->service->initier($demande);
+            $redirection = $this->service()->initier($demande);
         } catch (ErreurValidation $e) {
             throw new HttpException(422, $e->getMessage(), $e->erreurs);
         } catch (ExceptionFedaPay) {
@@ -52,10 +53,10 @@ final class PaiementController
         }
 
         // Le paramètre "status" de l'URL est ignoré : on redemande le statut à FedaPay.
-        $paiement = $this->service->synchroniser($transactionId)
+        $paiement = $this->service()->synchroniser($transactionId)
             ?? throw new HttpException(404, 'Paiement introuvable.');
 
-        return Response::redirection($this->service->urlRecu($paiement));
+        return Response::redirection($this->service()->urlRecu($paiement));
     }
 
     /** GET /recu/{reference} */
@@ -65,7 +66,7 @@ final class PaiementController
             ?? throw new HttpException(404, 'Reçu introuvable. Vérifiez la référence.');
 
         if ($paiement->statut === StatutPaiement::EnAttente) {
-            $paiement = $this->service->actualiser($paiement);
+            $paiement = $this->service()->actualiser($paiement);
         }
 
         $reponse = Response::html($this->vue->rendre('recu', [
@@ -76,5 +77,10 @@ final class PaiementController
             'Cache-Control' => 'no-store',
             'X-Robots-Tag'  => 'noindex',
         ]);
+    }
+
+    private function service(): ServicePaiement
+    {
+        return $this->service instanceof Closure ? ($this->service)() : $this->service;
     }
 }

@@ -6,6 +6,10 @@ namespace Tests\Infrastructure;
 
 use App\Application;
 use App\Controller\AdminController;
+use App\Domaine\ModePaiement;
+use App\Domaine\StatutPaiement;
+use App\Domaine\Tarification;
+use App\Domaine\ValidateurDemande;
 use App\Http\Csrf;
 use App\Http\Request;
 use App\Infrastructure\DepotPaiements;
@@ -44,6 +48,7 @@ final class AdminControllerTest extends TestCase
                 annee VARCHAR(20) NOT NULL,
                 montant INT NOT NULL,
                 statut VARCHAR(20) NOT NULL DEFAULT 'en_attente',
+                mode_paiement VARCHAR(20) NOT NULL DEFAULT 'en_ligne',
                 parent_nom VARCHAR(80) NOT NULL,
                 parent_prenom VARCHAR(80) NOT NULL,
                 parent_telephone CHAR(10) NOT NULL,
@@ -82,6 +87,8 @@ final class AdminControllerTest extends TestCase
             $vue,
             $this->depot,
             null,
+            new ValidateurDemande($this->ecole, new Tarification($this->ecole)),
+            new Tarification($this->ecole),
             $this->ecole,
             ['password' => 'directeur2026'],
             'http://localhost/paiement',
@@ -116,6 +123,8 @@ final class AdminControllerTest extends TestCase
             $vue,
             static fn (): DepotPaiements => throw new \RuntimeException('La base ne doit pas être appelée.'),
             null,
+            new ValidateurDemande($this->ecole, new Tarification($this->ecole)),
+            new Tarification($this->ecole),
             $this->ecole,
             ['password' => 'secret'],
             'http://localhost/paiement',
@@ -277,5 +286,82 @@ final class AdminControllerTest extends TestCase
 
         $apres = $this->depot->recensementParClasse('2026-2027', ['CP'])['CP']['eleves'];
         self::assertCount(0, $apres);
+    }
+
+    public function testPaiementEnEspecesAuGuichetEstEnregistreCommePaye(): void
+    {
+        AdminAuth::connecter();
+
+        $requete = new Request('POST', '/admin/paiements/guichet', [], [], '', '', [
+            '_csrf'        => Csrf::jeton(),
+            'mode'         => 'especes',
+            'contribution' => 'annuelle',
+            'eleves'       => [
+                ['nom' => 'Awa HOUNSOU', 'classe' => 'CI'],
+                ['nom' => 'Paul HOUNSOU', 'classe' => 'CM2'],
+                ['nom' => '', 'classe' => ''],
+            ],
+            'parent'       => ['nom' => 'HOUNSOU', 'prenom' => 'Marie', 'telephone' => ''],
+        ]);
+
+        $reponse = $this->controleur->encaisserAuGuichet($requete);
+
+        self::assertSame(303, $reponse->statut);
+        self::assertStringContainsString('/recu/CS-', $reponse->entetes['Location']);
+
+        $paiement = $this->depot->tous()[0];
+        self::assertSame(StatutPaiement::Paye, $paiement->statut);
+        self::assertSame(ModePaiement::Especes, $paiement->mode);
+        self::assertSame(45000, $paiement->montant);
+        self::assertSame('', $paiement->parentTelephone);
+        self::assertCount(2, $paiement->eleves);
+        self::assertNotNull($paiement->payeLe);
+        self::assertNull($paiement->transactionId);
+
+        // Les enfants apparaissent comme en règle dans le recensement de leur classe.
+        self::assertSame(1, $this->depot->recensementParClasse('2026-2027', ['CI'])['CI']['nb_payes']);
+    }
+
+    public function testPaiementAnterieurGardeLaDateIndiquee(): void
+    {
+        AdminAuth::connecter();
+
+        $requete = new Request('POST', '/admin/paiements/guichet', [], [], '', '', [
+            '_csrf'         => Csrf::jeton(),
+            'mode'          => 'anterieur',
+            'date_paiement' => '2026-09-15',
+            'contribution'  => 'annuelle',
+            'eleves'        => [['nom' => 'Fleur TOSSOU', 'classe' => 'CE1']],
+            'parent'        => ['nom' => 'TOSSOU', 'prenom' => 'Aimé', 'telephone' => '01 97 00 00 00'],
+        ]);
+
+        $this->controleur->encaisserAuGuichet($requete);
+
+        $paiement = $this->depot->tous()[0];
+        self::assertSame(ModePaiement::Anterieur, $paiement->mode);
+        self::assertSame(StatutPaiement::Paye, $paiement->statut);
+        self::assertSame(22000, $paiement->montant);
+        self::assertSame('2026-09-15', $paiement->payeLe?->format('Y-m-d'));
+        self::assertSame('0197000000', $paiement->parentTelephone);
+    }
+
+    public function testPaiementAuGuichetRefuseUneDateFutureOuUnModeInconnu(): void
+    {
+        AdminAuth::connecter();
+
+        foreach ([['mode' => 'anterieur', 'date_paiement' => '2999-01-01'], ['mode' => 'en_ligne']] as $variante) {
+            $requete = new Request('POST', '/admin/paiements/guichet', [], [], '', '', $variante + [
+                '_csrf'        => Csrf::jeton(),
+                'contribution' => 'annuelle',
+                'eleves'       => [['nom' => 'Fleur TOSSOU', 'classe' => 'CE1']],
+                'parent'       => ['nom' => 'TOSSOU', 'prenom' => 'Aimé', 'telephone' => ''],
+            ]);
+
+            $reponse = $this->controleur->encaisserAuGuichet($requete);
+
+            self::assertSame('http://localhost/paiement/admin', $reponse->entetes['Location']);
+            self::assertSame('erreur', AdminAuth::consommerFlashes()[0]['type']);
+        }
+        self::assertSame(0, $this->depot->compter());
     }
 }

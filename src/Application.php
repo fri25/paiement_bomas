@@ -95,6 +95,7 @@ final class Application
         $routeur->post('/admin/connexion', fn (Request $r) => $this->admin()->traiterConnexion($r));
         $routeur->post('/admin/deconnexion', fn (Request $r) => $this->admin()->deconnexion($r));
         $routeur->get('/admin/export', fn (Request $r) => $this->admin()->exporterCsv($r));
+        $routeur->post('/admin/paiements/guichet', fn (Request $r) => $this->admin()->encaisserAuGuichet($r));
         $routeur->post('/admin/paiements/{reference}/synchroniser', fn (Request $r, array $p) => $this->admin()->synchroniser($r, $p));
         $routeur->post('/admin/eleves', fn (Request $r) => $this->admin()->ajouterEleves($r));
         $routeur->post('/admin/eleves/{id}/supprimer', fn (Request $r, array $p) => $this->admin()->supprimerEleve($r, $p));
@@ -108,6 +109,8 @@ final class Application
             $this->vue,
             fn (): DepotPaiements => $this->depot(),
             fn (): ?ServicePaiement => $this->serviceOuNull(),
+            new ValidateurDemande($this->ecole, $this->tarification),
+            $this->tarification,
             $this->ecole,
             $this->config['admin'] ?? [],
             $this->config['url'],
@@ -128,7 +131,7 @@ final class Application
         return new PaiementController(
             $this->vue,
             new ValidateurDemande($this->ecole, $this->tarification),
-            $this->service(),
+            fn (): ServicePaiement => $this->service(),
             $this->depot(),
         );
     }
